@@ -362,9 +362,9 @@ export class SlackConnector implements PlatformConnector {
             }, 'Empty .history command - keeping newer messages, discarding older')
 
             // batchResults contains messages newer than .history (processed earlier in this batch)
-            // results contains messages from previous batches (also newer than .history)
-            // Return both - these are what we want to keep
-            results.push(...batchResults)
+            // They're in reverse chronological order (newest first), so reverse to get oldest first
+            // results already has older batches in correct order, so unshift the reversed batch
+            results.unshift(...batchResults.reverse())
             return results
           } else {
             // Recursively fetch from history target
