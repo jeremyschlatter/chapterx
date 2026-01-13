@@ -172,12 +172,13 @@ export class SlackConnector implements PlatformConnector {
           return
         }
 
-        // Regular message
+        // Regular message - convert to PlatformMessage so mentions are extracted
+        const converted = await this.convertSlackMessage(msg, msg.channel)
         this.queue.push({
           type: 'message',
           channelId: msg.channel,
           guildId: '', // Slack doesn't expose team_id in socket mode easily
-          data: msg,
+          data: converted,
           timestamp: new Date(parseFloat(msg.ts) * 1000),
         })
       } catch (error) {

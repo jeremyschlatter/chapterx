@@ -87,7 +87,8 @@ export class AgentLoop {
           await sleep(100)
         }
       } catch (error) {
-        logger.error({ error }, 'Error in agent loop')
+        const err = error as Error
+        logger.error({ error: err.message, stack: err.stack }, 'Error in agent loop')
         await sleep(1000)  // Back off on error
       }
     }
@@ -453,12 +454,20 @@ export class AgentLoop {
       if (event.type === 'message') {
         const message = event.data as any
         const content = message.content?.trim() || ''
-        
+
+        // Check mentions (works with Discord Collection or Slack array)
+        const hasMention = (mentions: any, userId: string): boolean => {
+          if (!mentions || !userId) return false
+          if (typeof mentions.has === 'function') return mentions.has(userId)
+          if (Array.isArray(mentions)) return mentions.includes(userId)
+          return false
+        }
+
         if ((event.data as any)._isMCommand) {
           reason = 'm_command'
         } else if (message.reference?.messageId && this.botMessageIds.has(message.reference.messageId)) {
           reason = 'reply'
-        } else if (this.botUserId && message.mentions?.has(this.botUserId)) {
+        } else if (this.botUserId && hasMention(message.mentions, this.botUserId)) {
           reason = 'mention'
         } else {
           reason = 'random'
@@ -640,14 +649,22 @@ export class AgentLoop {
         continue
       }
 
+      // Helper to check mentions (works with Discord Collection or Slack array)
+      const hasMention = (mentions: any, userId: string): boolean => {
+        if (!mentions || !userId) return false
+        if (typeof mentions.has === 'function') return mentions.has(userId)  // Discord Collection
+        if (Array.isArray(mentions)) return mentions.includes(userId)  // Slack array
+        return false
+      }
+
       // 1. Check for m command FIRST (before mention check)
       // This ensures "m continue <@bot>" gets flagged for deletion
       // Only trigger/delete if addressed to THIS bot (mention or reply)
       const content = message.content?.trim()
       if (content?.startsWith('m ')) {
-        const mentionsUs = this.botUserId && message.mentions?.has(this.botUserId)
+        const mentionsUs = this.botUserId && hasMention(message.mentions, this.botUserId)
         const repliesTo = message.reference?.messageId && this.botMessageIds.has(message.reference.messageId)
-        
+
         if (mentionsUs || repliesTo) {
           logger.debug({ messageId: message.id, command: content, mentionsUs, repliesTo }, 'Activated by m command addressed to us')
           // Store m command event for deletion (only if addressed to us)
@@ -660,7 +677,12 @@ export class AgentLoop {
       }
 
       // 2. Check for bot mention
-      if (this.botUserId && message.mentions?.has(this.botUserId)) {
+      logger.debug({
+        botUserId: this.botUserId,
+        mentions: message.mentions,
+        hasMentionResult: hasMention(message.mentions, this.botUserId!)
+      }, 'Checking mentions')
+      if (this.botUserId && hasMention(message.mentions, this.botUserId)) {
         // Check bot reply chain depth to prevent bot loops
         const chainDepth = await this.connector.getBotReplyChainDepth(channelId, message)
         
