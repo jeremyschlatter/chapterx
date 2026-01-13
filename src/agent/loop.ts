@@ -280,6 +280,12 @@ export class AgentLoop {
       // Track message IDs
       sentMessageIds.push(...msgIds)
       msgIds.forEach(id => this.botMessageIds.add(id))
+
+      // For Slack threads: also track the thread parent ID (replyToMessageId)
+      // This allows us to detect when someone replies to a thread we participated in
+      if (i === 0 && replyToMessageId) {
+        this.botMessageIds.add(replyToMessageId)
+      }
       
       if (msgIds.length > 0) {
         // First message of this segment gets the prefix
@@ -463,9 +469,12 @@ export class AgentLoop {
           return false
         }
 
+        // Check both Discord-style (reference.messageId) and platform-agnostic (referencedMessage/threadId)
+        const replyRef = message.reference?.messageId || message.referencedMessage || message.threadId
+
         if ((event.data as any)._isMCommand) {
           reason = 'm_command'
-        } else if (message.reference?.messageId && this.botMessageIds.has(message.reference.messageId)) {
+        } else if (replyRef && this.botMessageIds.has(replyRef)) {
           reason = 'reply'
         } else if (this.botUserId && hasMention(message.mentions, this.botUserId)) {
           reason = 'mention'
@@ -663,7 +672,9 @@ export class AgentLoop {
       const content = message.content?.trim()
       if (content?.startsWith('m ')) {
         const mentionsUs = this.botUserId && hasMention(message.mentions, this.botUserId)
-        const repliesTo = message.reference?.messageId && this.botMessageIds.has(message.reference.messageId)
+        // Check both Discord-style (reference.messageId) and platform-agnostic (referencedMessage)
+        const replyRef = message.reference?.messageId || message.referencedMessage
+        const repliesTo = replyRef && this.botMessageIds.has(replyRef)
 
         if (mentionsUs || repliesTo) {
           logger.debug({ messageId: message.id, command: content, mentionsUs, repliesTo }, 'Activated by m command addressed to us')
@@ -722,13 +733,15 @@ export class AgentLoop {
       }
 
       // 3. Check for reply to bot's message (but ignore replies from other bots without mention)
-      if (message.reference?.messageId && this.botMessageIds.has(message.reference.messageId)) {
+      // Check both Discord-style (reference.messageId) and platform-agnostic (referencedMessage/threadId)
+      const replyRef = message.reference?.messageId || message.referencedMessage || message.threadId
+      if (replyRef && this.botMessageIds.has(replyRef)) {
         // If the replying user is a bot, only activate if they explicitly mentioned us
         if (message.author?.bot) {
           logger.debug({ messageId: message.id, author: message.author?.username }, 'Ignoring bot reply without mention')
           continue
         }
-        logger.debug({ messageId: message.id }, 'Activated by reply')
+        logger.debug({ messageId: message.id, replyRef }, 'Activated by reply')
         return true
       }
 
