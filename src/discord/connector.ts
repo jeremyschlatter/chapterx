@@ -1,6 +1,7 @@
 /**
  * Discord Connector
  * Handles all Discord API interactions
+ * Implements PlatformConnector interface for platform abstraction
  */
 
 import { Attachment, Client, GatewayIntentBits, Message, TextChannel } from 'discord.js'
@@ -16,6 +17,10 @@ import {
   CachedDocument,
   DiscordError,
 } from '../types.js'
+import {
+  PlatformConnector,
+  FetchContextParams,
+} from '../platform/index.js'
 import { logger } from '../utils/logger.js'
 import { retryDiscord } from '../utils/retry.js'
 
@@ -27,16 +32,10 @@ export interface ConnectorOptions {
 
 const MAX_TEXT_ATTACHMENT_BYTES = 200_000  // ~200 KB of inline text per attachment
 
-export interface FetchContextParams {
-  channelId: string
-  depth: number  // Max messages
-  targetMessageId?: string  // Optional: Fetch backward from this message ID (for API range queries)
-  firstMessageId?: string  // Optional: Stop when this message is encountered
-  authorized_roles?: string[]
-  pinnedConfigs?: string[]  // Optional: Pre-fetched pinned configs (skips fetchPinned call)
-}
+// Re-export FetchContextParams for backward compatibility
+export { FetchContextParams } from '../platform/index.js'
 
-export class DiscordConnector {
+export class DiscordConnector implements PlatformConnector {
   private client: Client
   private typingIntervals = new Map<string, NodeJS.Timeout>()
   private imageCache = new Map<string, CachedImage>()

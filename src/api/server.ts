@@ -1,11 +1,12 @@
 /**
  * HTTP API Server
- * Provides REST endpoints for accessing Discord conversation history
+ * Provides REST endpoints for accessing conversation history
  */
 
 import express, { Request, Response, NextFunction } from 'express'
-import { DiscordConnector } from '../discord/connector.js'
+import { PlatformConnector } from '../platform/index.js'
 import { logger } from '../utils/logger.js'
+import { parseSlackMessageUrl, isSlackMessageUrl } from '../slack/utils.js'
 
 export interface ApiConfig {
   port: number
@@ -13,8 +14,8 @@ export interface ApiConfig {
 }
 
 export interface MessageExportRequest {
-  last: string  // Discord message URL (required)
-  first?: string  // Discord message URL to stop at (optional)
+  last: string  // Message URL - Discord or Slack format (required)
+  first?: string  // Message URL to stop at - Discord or Slack format (optional)
   recencyWindow?: {
     messages?: number
     characters?: number
@@ -64,7 +65,7 @@ export class ApiServer {
 
   constructor(
     private config: ApiConfig,
-    private connector: DiscordConnector
+    private connector: PlatformConnector
   ) {
     this.setupMiddleware()
     this.setupRoutes()
@@ -120,10 +121,10 @@ export class ApiServer {
         const body = req.body as MessageExportRequest
 
         if (!body.last) {
-          res.status(400).json({ 
+          res.status(400).json({
             error: 'Bad Request',
             message: 'Missing required parameter: last',
-            details: 'The "last" field must contain a Discord message URL'
+            details: 'The "last" field must contain a message URL (Discord or Slack format)'
           })
           return
         }
@@ -134,11 +135,11 @@ export class ApiServer {
         logger.error({ error, body: req.body }, 'API error in /api/messages/export')
         
         // Map known errors to appropriate status codes
-        if (error.message?.includes('Invalid Discord message URL')) {
-          res.status(400).json({ 
+        if (error.message?.includes('Invalid') && error.message?.includes('URL')) {
+          res.status(400).json({
             error: 'Bad Request',
             message: error.message,
-            details: 'Expected format: https://discord.com/channels/GUILD_ID/CHANNEL_ID/MESSAGE_ID'
+            details: 'Expected format: Discord (https://discord.com/channels/GUILD_ID/CHANNEL_ID/MESSAGE_ID) or Slack (https://workspace.slack.com/archives/CHANNEL_ID/pTIMESTAMP)'
           })
         } else if (error.message?.includes('not found') || error.message?.includes('Unknown Message')) {
           res.status(404).json({ 
@@ -247,8 +248,8 @@ export class ApiServer {
     
     logger.debug({ channelId, guildId, lastMessageId, firstMessageId }, 'Parsed IDs from URL')
     
-    if (!channelId || !guildId || !lastMessageId) {
-      throw new Error('Invalid Discord message URL format')
+    if (!channelId || !lastMessageId) {
+      throw new Error('Invalid message URL format')
     }
 
     // Determine recency window (default: 50 messages)
@@ -355,7 +356,7 @@ export class ApiServer {
       messages: exportedMessages,
       metadata: {
         channelId,
-        guildId,
+        guildId: guildId || context.guildId || '',
         firstMessageId: messages[0]?.id || '',
         lastMessageId: messages[messages.length - 1]?.id || '',
         totalCount: messages.length,
@@ -530,16 +531,33 @@ export class ApiServer {
   }
 
   private extractChannelIdFromUrl(url: string): string | null {
+    // Try Slack format first
+    if (isSlackMessageUrl(url)) {
+      const parsed = parseSlackMessageUrl(url)
+      return parsed?.channel || null
+    }
+    // Discord format
     const match = url.match(/\/channels\/\d+\/(\d+)\/\d+/)
     return match ? match[1]! : null
   }
 
   private extractGuildIdFromUrl(url: string): string | null {
+    // Slack URLs don't contain workspace ID, return empty for Slack
+    if (isSlackMessageUrl(url)) {
+      return ''  // Will be fetched from channel info
+    }
+    // Discord format
     const match = url.match(/\/channels\/(\d+)\/\d+\/\d+/)
     return match ? match[1]! : null
   }
 
   private extractMessageIdFromUrl(url: string): string | null {
+    // Try Slack format first
+    if (isSlackMessageUrl(url)) {
+      const parsed = parseSlackMessageUrl(url)
+      return parsed?.ts || null
+    }
+    // Discord format
     const match = url.match(/\/channels\/\d+\/\d+\/(\d+)/)
     return match ? match[1]! : null
   }
