@@ -355,22 +355,17 @@ export class SlackConnector implements PlatformConnector {
           logger.debug({ historyRange, messageTs: msg.ts }, 'Parsed .history command')
 
           if (historyRange === null) {
-            // Empty .history - clear history before this point
+            // Empty .history - stop here, keep only messages newer than this
             logger.debug({
               resultsCount: results.length,
               batchResultsCount: batchResults.length,
             }, 'Empty .history command - keeping newer messages, discarding older')
 
-            // Restore newer messages if we had a pending range
-            if ((this as any)[pendingKey]) {
-              results.length = 0
-              results.push(...(this as any)[pendingKey])
-              delete (this as any)[pendingKey]
-            }
-
-            batchResults.length = 0
-            foundHistory = true
-            continue
+            // batchResults contains messages newer than .history (processed earlier in this batch)
+            // results contains messages from previous batches (also newer than .history)
+            // Return both - these are what we want to keep
+            results.push(...batchResults)
+            return results
           } else {
             // Recursively fetch from history target
             const targetChannelId = this.extractChannelIdFromUrl(historyRange.last) || channelId
