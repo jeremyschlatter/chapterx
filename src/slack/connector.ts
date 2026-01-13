@@ -34,7 +34,7 @@ export interface SlackConnectorOptions {
 }
 
 // Re-export FetchContextParams for convenience
-export { FetchContextParams } from '../platform/index.js'
+export type { FetchContextParams } from '../platform/index.js'
 
 // Slack message type from API
 interface SlackMessage {

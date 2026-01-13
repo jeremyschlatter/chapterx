@@ -33,7 +33,7 @@ export interface ConnectorOptions {
 const MAX_TEXT_ATTACHMENT_BYTES = 200_000  // ~200 KB of inline text per attachment
 
 // Re-export FetchContextParams for backward compatibility
-export { FetchContextParams } from '../platform/index.js'
+export type { FetchContextParams } from '../platform/index.js'
 
 export class DiscordConnector implements PlatformConnector {
   private client: Client

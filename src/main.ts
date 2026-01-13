@@ -210,7 +210,8 @@ async function main() {
     await agentLoop.run()
 
   } catch (error) {
-    logger.fatal({ error }, 'Fatal error')
+    const err = error as Error
+    logger.fatal({ error: err.message, stack: err.stack }, 'Fatal error')
     process.exit(1)
   }
 }

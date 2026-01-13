@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsx src/main.ts",
-    "dev:slack": "PLATFORM=slack tsx src/main.ts",
+    "dev:slack": "PLATFORM=slack node --env-file=.env --import tsx src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "lint": "eslint src/**/*.ts",
