@@ -356,6 +356,7 @@ export class AgentLoop {
     // Get triggering message ID for tool tracking (prefer non-system messages)
     const triggeringEvent = this.findTriggeringMessageEvent(events)
     const triggeringMessageId = triggeringEvent?.data?.id
+    const triggeringThreadTs = triggeringEvent?.data?.threadId  // For Slack threads
 
     // Check for m command and delete it
     const mCommandEvent = events.find((e) => e.type === 'message' && (e.data as any)._isMCommand)
@@ -413,8 +414,8 @@ export class AgentLoop {
                 reason: activationReason.reason,
                 triggerEvents: activationReason.events,
               })
-              
-              return this.handleActivation(channelId, guildId, triggeringMessageId, traceCollector)
+
+              return this.handleActivation(channelId, guildId, triggeringMessageId, triggeringThreadTs, traceCollector)
             },
             channelName
           )
@@ -438,7 +439,7 @@ export class AgentLoop {
             throw traceError
           }
         })
-      : this.handleActivation(channelId, guildId, triggeringMessageId)
+      : this.handleActivation(channelId, guildId, triggeringMessageId, triggeringThreadTs)
     
     activationPromise
       .catch((error) => {
@@ -778,12 +779,13 @@ export class AgentLoop {
   }
 
   private async handleActivation(
-    channelId: string, 
-    guildId: string, 
+    channelId: string,
+    guildId: string,
     triggeringMessageId?: string,
+    threadTs?: string,  // For Slack threads
     trace?: TraceCollector
   ): Promise<void> {
-    logger.info({ botId: this.botId, channelId, guildId, triggeringMessageId, traceId: trace?.getTraceId() }, 'Bot activated')
+    logger.info({ botId: this.botId, channelId, guildId, triggeringMessageId, threadTs, traceId: trace?.getTraceId() }, 'Bot activated')
 
     // Profiling helper
     const timings: Record<string, number> = {}
@@ -846,6 +848,7 @@ export class AgentLoop {
       const discordContext = await this.connector.fetchContext({
         channelId,
         depth: fetchDepth,
+        threadTs,  // For Slack threads - fetch thread replies instead of channel history
         // Note: We no longer pass firstMessageId here. Cache stability is now based on
         // the first message in the FINAL request (after context building), not the fetch.
         // This avoids anchoring to messages that slide out of the fetchable window.

@@ -66,6 +66,7 @@ export interface FetchContextParams {
   depth: number // Max messages
   targetMessageId?: string // Optional: Fetch backward from this message ID
   firstMessageId?: string // Optional: Stop when this message is encountered
+  threadTs?: string // Optional: For Slack threads - fetch thread replies instead of channel history
   authorized_roles?: string[]
   pinnedConfigs?: string[] // Optional: Pre-fetched pinned configs
 }

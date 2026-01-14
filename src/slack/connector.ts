@@ -243,7 +243,7 @@ export class SlackConnector implements PlatformConnector {
   private typingReactions = new Map<string, string>()  // channelId -> messageId with 👀 reaction
 
   async fetchContext(params: FetchContextParams): Promise<PlatformContext> {
-    const { channelId, depth, targetMessageId, firstMessageId, pinnedConfigs: providedConfigs } = params
+    const { channelId, depth, targetMessageId, firstMessageId, threadTs, pinnedConfigs: providedConfigs } = params
 
     // Reset history tracking for this fetch
     this.lastHistoryOriginChannelId = null
@@ -255,14 +255,22 @@ export class SlackConnector implements PlatformConnector {
     const images: CachedImage[] = []
     const documents: CachedDocument[] = []
 
-    let messages = await this.fetchMessagesRecursive(
-      channelId,
-      targetMessageId,
-      undefined,  // Let .history commands define their own boundaries
-      depth,
-      images,
-      documents
-    )
+    let messages: PlatformMessage[]
+
+    // If this is a thread, fetch thread replies instead of channel history
+    if (threadTs) {
+      logger.debug({ channelId, threadTs, depth }, 'Fetching thread replies')
+      messages = await this.fetchThreadMessages(channelId, threadTs, depth, images, documents)
+    } else {
+      messages = await this.fetchMessagesRecursive(
+        channelId,
+        targetMessageId,
+        undefined,  // Let .history commands define their own boundaries
+        depth,
+        images,
+        documents
+      )
+    }
 
     // Trim to firstMessageId if specified
     if (firstMessageId) {
@@ -450,6 +458,65 @@ export class SlackConnector implements PlatformConnector {
       }
     }
 
+    return results
+  }
+
+  /**
+   * Fetch messages from a thread using conversations.replies
+   */
+  private async fetchThreadMessages(
+    channelId: string,
+    threadTs: string,
+    maxMessages: number,
+    images: CachedImage[],
+    documents: CachedDocument[]
+  ): Promise<PlatformMessage[]> {
+    const results: PlatformMessage[] = []
+    let cursor: string | undefined
+
+    while (results.length < maxMessages) {
+      const result = await this.client.conversations.replies({
+        channel: channelId,
+        ts: threadTs,
+        limit: Math.min(100, maxMessages - results.length),
+        cursor,
+      })
+
+      if (!result.messages || result.messages.length === 0) {
+        break
+      }
+
+      for (const msg of result.messages as SlackMessage[]) {
+        // Skip non-message subtypes we don't care about
+        if (msg.subtype && !['bot_message', 'file_share', 'thread_broadcast'].includes(msg.subtype)) {
+          continue
+        }
+
+        const converted = await this.convertSlackMessage(msg, channelId)
+        results.push(converted)
+
+        // Collect images and documents
+        if (msg.files) {
+          for (const file of msg.files) {
+            if (file.mimetype?.startsWith('image/')) {
+              const cached = await this.fetchAndCacheImage(file)
+              if (cached) images.push(cached)
+            } else if (this.isTextFile(file.mimetype)) {
+              const doc = await this.fetchTextDocument(file, msg.ts)
+              if (doc) documents.push(doc)
+            }
+          }
+        }
+      }
+
+      // Check for more pages
+      if (!result.has_more || !result.response_metadata?.next_cursor) {
+        break
+      }
+      cursor = result.response_metadata.next_cursor
+    }
+
+    logger.debug({ channelId, threadTs, messageCount: results.length }, 'Fetched thread messages')
     return results
   }
 
