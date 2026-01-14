@@ -308,6 +308,7 @@ export interface DiscordMessage {
   }>
   mentions: string[]  // User IDs
   referencedMessage?: string  // Reply to message ID
+  threadSummary?: { replyCount: number; participants: string[] }
 }
 
 export interface DiscordAttachment {

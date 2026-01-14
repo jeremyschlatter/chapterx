@@ -45,6 +45,8 @@ interface SlackMessage {
   bot_id?: string
   text?: string
   thread_ts?: string
+  reply_count?: number
+  reply_users?: string[]
   files?: SlackFile[]
   reactions?: Array<{ name: string; count: number; users: string[] }>
   attachments?: any[]
@@ -831,6 +833,18 @@ export class SlackConnector implements PlatformConnector {
     let content = msg.text || ''
     content = await this.convertMentionsToUsernames(content)
 
+    // Build thread summary if message has replies
+    let threadSummary: { replyCount: number; participants: string[] } | undefined
+    if (msg.reply_count && msg.reply_count > 0 && msg.reply_users) {
+      const participants: string[] = []
+      for (const userId of msg.reply_users) {
+        const replyUser = await this.getUser(userId)
+        const displayName = replyUser?.profile?.display_name || replyUser?.real_name || replyUser?.name || 'Unknown'
+        participants.push(displayName)
+      }
+      threadSummary = { replyCount: msg.reply_count, participants }
+    }
+
     return {
       id: msg.ts,
       channelId,
@@ -848,6 +862,7 @@ export class SlackConnector implements PlatformConnector {
       mentions,
       referencedMessage: msg.thread_ts !== msg.ts ? msg.thread_ts : undefined,
       threadId: msg.thread_ts,
+      threadSummary,
     }
   }
 
@@ -879,6 +894,11 @@ export class SlackConnector implements PlatformConnector {
       mentions.push(match[1]!)
     }
 
+    // Thread summary with user IDs (can't resolve names synchronously)
+    const threadSummary = msg.reply_count && msg.reply_count > 0 && msg.reply_users
+      ? { replyCount: msg.reply_count, participants: msg.reply_users }
+      : undefined
+
     return {
       id: msg.ts,
       channelId,
@@ -896,6 +916,7 @@ export class SlackConnector implements PlatformConnector {
       mentions,
       referencedMessage: msg.thread_ts !== msg.ts ? msg.thread_ts : undefined,
       threadId: msg.thread_ts,
+      threadSummary,
     }
   }
 

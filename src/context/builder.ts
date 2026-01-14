@@ -756,11 +756,15 @@ export class ContextBuilder {
     for (const msg of messages) {
       const content: ContentBlock[] = []
 
-      // Add text content
+      // Add text content (with thread summary if present)
       if (msg.content.trim()) {
+        let text = msg.content
+        if (msg.threadSummary) {
+          text += '\n' + this.formatThreadSummary(msg.threadSummary)
+        }
         content.push({
           type: 'text',
-          text: msg.content,
+          text,
         })
       }
 
@@ -898,6 +902,16 @@ export class ContextBuilder {
     }
 
     return participantMessages
+  }
+
+  private formatThreadSummary(summary: { replyCount: number; participants: string[] }): string {
+    const { replyCount, participants } = summary
+    const shown = participants.slice(0, 3)
+    const remaining = participants.length - 3
+    const names = remaining > 0
+      ? `${shown.join(', ')}, and ${remaining} others`
+      : shown.join(', ')
+    return `< ${replyCount} threaded replies hidden, from ${names} >\n`
   }
 
   private limitImages(messages: ParticipantMessage[], max_images: number): void {

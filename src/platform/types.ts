@@ -31,6 +31,7 @@ export interface PlatformMessage {
   mentions: string[] // User IDs
   referencedMessage?: string // Reply to message ID
   threadId?: string // For Slack thread support (thread_ts)
+  threadSummary?: { replyCount: number; participants: string[] }
 }
 
 export interface PlatformAttachment {
