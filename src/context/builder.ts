@@ -911,7 +911,7 @@ export class ContextBuilder {
     const names = remaining > 0
       ? `${shown.join(', ')}, and ${remaining} others`
       : shown.join(', ')
-    return `< ${replyCount} threaded replies hidden, from ${names} >\n`
+    return `<thread snipped: ${replyCount} replies from ${names}>\n`
   }
 
   private limitImages(messages: ParticipantMessage[], max_images: number): void {
@@ -1491,7 +1491,10 @@ export class ContextBuilder {
 
     // Add configured stop sequences (user-defined are important)
     sequences.push(...config.stop_sequences)
-    
+
+    // Prevent LLM from generating thread snipped markers
+    sequences.push('<thread snipped')
+
     // Add system message prefixes (lower priority)
     sequences.push('\nSystem:')
     
