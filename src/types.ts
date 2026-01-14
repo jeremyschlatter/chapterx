@@ -41,6 +41,7 @@ export interface ParticipantMessage {
   timestamp?: Date
   messageId?: string  // Discord message ID (for cache markers)
   cacheControl?: CacheControl
+  hasThread?: boolean  // True if message has thread replies (prevents merging)
 }
 
 /**

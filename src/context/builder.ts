@@ -419,7 +419,8 @@ export class ContextBuilder {
         lastMsg &&
         lastMsg.author.displayName === botName &&
         !isDotMessage &&
-        !lastIsDotMessage
+        !lastIsDotMessage &&
+        !lastMsg.threadSummary  // Don't merge if previous message has a thread
       ) {
         // Merge with previous message (space separator)
         lastMsg.content = `${lastMsg.content} ${msg.content}`
@@ -447,7 +448,8 @@ export class ContextBuilder {
       const lastMsg = merged[merged.length - 1]
       
       // Check if we should merge with previous message
-      if (lastMsg && lastMsg.participant === msg.participant) {
+      // Don't merge if previous message has a thread (thread summary should stay with its message)
+      if (lastMsg && lastMsg.participant === msg.participant && !lastMsg.hasThread) {
         // Merge content arrays
         // For text blocks, we join with space; for other types, just append
         const lastTextBlockIndex = lastMsg.content.map(c => c.type).lastIndexOf('text')
@@ -893,6 +895,7 @@ export class ContextBuilder {
         content,
         timestamp: msg.timestamp,
         messageId: msg.id,
+        hasThread: !!msg.threadSummary,
       })
     }
 
