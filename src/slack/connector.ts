@@ -240,6 +240,7 @@ export class SlackConnector implements PlatformConnector {
 
   // Track history origin for plugin state inheritance
   private lastHistoryOriginChannelId: string | null = null
+  private typingReactions = new Map<string, string>()  // channelId -> messageId with 👀 reaction
 
   async fetchContext(params: FetchContextParams): Promise<PlatformContext> {
     const { channelId, depth, targetMessageId, firstMessageId, pinnedConfigs: providedConfigs } = params
@@ -641,13 +642,49 @@ export class SlackConnector implements PlatformConnector {
     })
   }
 
-  async startTyping(_channelId: string): Promise<void> {
+  async startTyping(channelId: string, messageId?: string): Promise<void> {
     // Slack doesn't have a typing indicator API for bots
-    // This is a no-op
+    // Instead, we add a 👀 reaction to the triggering message
+    if (!messageId) return
+
+    try {
+      await this.client.reactions.add({
+        channel: channelId,
+        timestamp: messageId,
+        name: 'eyes',  // 👀
+      })
+      this.typingReactions.set(channelId, messageId)
+    } catch (error) {
+      // Ignore errors (e.g., already reacted)
+      logger.debug({ error, channelId, messageId }, 'Failed to add typing reaction')
+    }
   }
 
-  async stopTyping(_channelId: string): Promise<void> {
-    // No-op for Slack
+  async stopTyping(channelId: string, error?: boolean): Promise<void> {
+    const messageId = this.typingReactions.get(channelId)
+    if (!messageId) return
+
+    try {
+      // Remove the 👀 reaction
+      await this.client.reactions.remove({
+        channel: channelId,
+        timestamp: messageId,
+        name: 'eyes',
+      })
+
+      // If there was an error, add 😵 reaction
+      if (error) {
+        await this.client.reactions.add({
+          channel: channelId,
+          timestamp: messageId,
+          name: 'dizzy_face',  // 😵
+        })
+      }
+    } catch (err) {
+      logger.debug({ error: err, channelId, messageId }, 'Failed to remove typing reaction')
+    } finally {
+      this.typingReactions.delete(channelId)
+    }
   }
 
   async getBotReplyChainDepth(channelId: string, message: any): Promise<number> {

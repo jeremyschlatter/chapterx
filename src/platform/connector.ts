@@ -129,13 +129,15 @@ export interface PlatformConnector {
 
   /**
    * Start typing indicator (refreshes automatically)
+   * For Slack: adds 👀 reaction to the message
    */
-  startTyping(channelId: string): Promise<void>
+  startTyping(channelId: string, messageId?: string): Promise<void>
 
   /**
    * Stop typing indicator
+   * For Slack: removes 👀 reaction, adds 😵 if error
    */
-  stopTyping(channelId: string): Promise<void>
+  stopTyping(channelId: string, error?: boolean): Promise<void>
 
   // ============================================================================
   // Bot Loop Prevention

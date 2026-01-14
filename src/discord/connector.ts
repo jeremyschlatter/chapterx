@@ -1135,7 +1135,7 @@ export class DiscordConnector implements PlatformConnector {
   /**
    * Start typing indicator (refreshes every 8 seconds)
    */
-  async startTyping(channelId: string): Promise<void> {
+  async startTyping(channelId: string, _messageId?: string): Promise<void> {
     const channel = await this.client.channels.fetch(channelId) as TextChannel
 
     if (!channel || !channel.isTextBased()) {
@@ -1160,7 +1160,7 @@ export class DiscordConnector implements PlatformConnector {
   /**
    * Stop typing indicator
    */
-  async stopTyping(channelId: string): Promise<void> {
+  async stopTyping(channelId: string, _error?: boolean): Promise<void> {
     const interval = this.typingIntervals.get(channelId)
     if (interval) {
       clearInterval(interval)

@@ -800,8 +800,8 @@ export class AgentLoop {
     const profileStart = Date.now()
 
     startProfile('typing')
-    // Start typing indicator
-    await this.connector.startTyping(channelId)
+    // Start typing indicator (for Slack, this adds 👀 reaction to the message)
+    await this.connector.startTyping(channelId, triggeringMessageId)
     endProfile('typing')
 
     try {
@@ -1332,7 +1332,7 @@ export class AgentLoop {
 
       logger.info({ channelId, tokens: completion.usage, didRoll: contextResult.didRoll }, 'Activation complete')
     } catch (error) {
-      await this.connector.stopTyping(channelId)
+      await this.connector.stopTyping(channelId, true)  // true = error, show 😵
       
       // Record error to trace
       if (trace) {
