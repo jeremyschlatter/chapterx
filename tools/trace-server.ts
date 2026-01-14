@@ -214,12 +214,23 @@ function handleApi(req: IncomingMessage, res: ServerResponse, path: string): voi
       const url = new URL(req.url!, `http://localhost:${PORT}`)
       const query = url.searchParams.get('q') || ''
       const botFilter = url.searchParams.get('bot') || undefined
-      
-      // Extract message ID from Discord URL or use directly
+
+      // Extract message ID from URL or use directly
       let messageId = query
-      const urlMatch = query.match(/\/channels\/\d+\/\d+\/(\d+)/)
-      if (urlMatch) {
-        messageId = urlMatch[1]!
+
+      // Discord URL: /channels/guild/channel/messageId
+      const discordMatch = query.match(/\/channels\/\d+\/\d+\/(\d+)/)
+      if (discordMatch) {
+        messageId = discordMatch[1]!
+      }
+
+      // Slack URL: /archives/channel/pTimestamp (timestamp without decimal)
+      const slackMatch = query.match(/\/archives\/\w+\/p(\d+)/)
+      if (slackMatch) {
+        // Convert Slack URL timestamp (e.g. "1768355439999519") to message ts (e.g. "1768355439.999519")
+        const rawTs = slackMatch[1]!
+        // Slack timestamps have 6 decimal places, so insert decimal after 10th digit
+        messageId = rawTs.slice(0, 10) + '.' + rawTs.slice(10)
       }
       
       const index = loadIndex(botFilter)
@@ -955,13 +966,13 @@ const HTML = `<!DOCTYPE html>
     <!-- Search View -->
     <div id="searchView">
       <div class="search-box">
-        <label>Paste Discord message link or ID</label>
+        <label>Paste message link or ID</label>
         <div class="search-input-row">
-          <input type="text" id="searchInput" placeholder="https://discord.com/channels/123/456/789... or just 789...">
+          <input type="text" id="searchInput" placeholder="Slack or Discord message URL, or message ID...">
           <button onclick="search()">Find Traces</button>
         </div>
         <div class="search-hint">
-          Tip: Right-click any Discord message → Copy Message Link
+          Tip: In Slack, hover over a message → More actions → Copy link
         </div>
       </div>
       
@@ -1368,7 +1379,7 @@ const HTML = `<!DOCTYPE html>
                   \${m.hasCacheControl ? '<span class="cache-badge">📍 CACHE</span>' : ''}
                   <span style="color: var(--text-muted); margin-left: 8px;">~\${formatTokens(m.tokenEstimate)} tk</span>
                   <div class="message-meta">
-                    Discord ID: \${m.discordMessageId || 'N/A'}
+                    ID: \${m.discordMessageId || 'N/A'}
                     \${m.hasImages ? ' | ' + m.imageCount + ' image(s)' : ''}
                     \${m.transformations?.length ? ' | ' + m.transformations.join(', ') : ''}
                   </div>
