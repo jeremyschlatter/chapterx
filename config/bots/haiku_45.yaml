@@ -1,0 +1,15 @@
+name: Haiku 4.5
+
+mode: prefill
+continuation_model: claude-haiku-4-5-20251001
+temperature: 1.0
+max_tokens: 4096
+
+recency_window_messages: 400
+rolling_threshold: 50
+
+include_images: true
+max_images: 5
+
+tools_enabled: false
+reply_on_random: 20

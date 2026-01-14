@@ -11,6 +11,9 @@ discord_token
 *_discord_token
 api_token
 
+# Deploy tokens (Slack)
+deploy/tokens/
+
 # Logs
 logs/
 *.log
