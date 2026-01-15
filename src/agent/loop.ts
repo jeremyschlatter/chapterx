@@ -1128,10 +1128,11 @@ export class AgentLoop {
         sentMessageIds: inlineSentMessageIds,
         messageContexts: inlineMessageContexts
       } = await this.executeWithInlineTools(
-        contextResult.request, 
-        config, 
+        contextResult.request,
+        config,
         channelId,
         triggeringMessageId || '',
+        threadTs,  // For Slack: reply in thread if triggered from thread
         activation?.id,
         discordContext.messages  // For post-hoc participant truncation
       )
@@ -1366,6 +1367,7 @@ export class AgentLoop {
     config: BotConfig,
     channelId: string,
     triggeringMessageId: string,
+    threadTs?: string,  // For Slack: thread parent ts to reply in
     _activationId?: string,
     discordMessages?: DiscordMessage[]  // For post-hoc participant truncation
   ): Promise<{ 
@@ -1510,6 +1512,7 @@ export class AgentLoop {
             lastContextEndPos,
             channelId,
             triggeringMessageId,
+            threadTs,
             config,
             llmRequest,
             discordMessages,
@@ -1544,6 +1547,7 @@ export class AgentLoop {
           lastContextEndPos,
           channelId,
           triggeringMessageId,
+          threadTs,
           config,
           llmRequest,
           discordMessages,
@@ -1584,6 +1588,7 @@ export class AgentLoop {
             lastContextEndPos,
             channelId,
             triggeringMessageId,
+            threadTs,
             config,
             llmRequest,
             discordMessages,
@@ -1599,10 +1604,11 @@ export class AgentLoop {
       
       if (segments.length > 0) {
         // Send segments, preserving invisible content associations
+        // For Slack: use threadTs to reply in existing thread, otherwise no threading
         const sendResult = await this.sendSegments(
           channelId,
           segments,
-          toolDepth === 0 ? triggeringMessageId : undefined  // Only reply on first message
+          toolDepth === 0 ? (threadTs || undefined) : undefined  // Reply in thread if in thread
         )
         sentMsgIdsThisRound = sendResult.sentMessageIds
         allSentMessageIds.push(...sentMsgIdsThisRound)
@@ -1697,7 +1703,7 @@ export class AgentLoop {
     }
     
     logger.warn('Reached max inline tool depth')
-    
+
     return this.finalizeInlineExecution({
       accumulatedOutput,
       pendingToolPersistence,
@@ -1708,6 +1714,7 @@ export class AgentLoop {
       lastContextEndPos,
       channelId,
       triggeringMessageId,
+      threadTs,
       config,
       llmRequest,
       discordMessages,
@@ -1730,6 +1737,7 @@ export class AgentLoop {
     lastContextEndPos: number;
     channelId: string;
     triggeringMessageId: string;
+    threadTs?: string;  // For Slack: thread parent ts to reply in
     config: BotConfig;
     llmRequest: any;
     discordMessages?: DiscordMessage[];
@@ -1745,10 +1753,10 @@ export class AgentLoop {
     actualSentText: string;  // For trace validation
   }> {
     let { accumulatedOutput } = params
-    const { 
-      pendingToolPersistence, allToolCallIds, allPreambleMessageIds, 
+    const {
+      pendingToolPersistence, allToolCallIds, allPreambleMessageIds,
       allSentMessageIds, messageContexts, lastContextEndPos,
-      channelId, triggeringMessageId, config, llmRequest, discordMessages,
+      channelId, triggeringMessageId: _triggeringMessageId, threadTs, config, llmRequest, discordMessages,
       suffix, stopReason
     } = params
     
@@ -1827,13 +1835,14 @@ export class AgentLoop {
       }
     }
     
-    // 8. Send segments to Discord
+    // 8. Send segments to Discord/Slack
+    // For Slack: use threadTs to reply in existing thread, otherwise no threading
     let actualSentText = ''
     if (segments.length > 0) {
       const sendResult = await this.sendSegments(
-        channelId, 
-        segments, 
-        allSentMessageIds.length === 0 ? triggeringMessageId : undefined
+        channelId,
+        segments,
+        allSentMessageIds.length === 0 ? (threadTs || undefined) : undefined
       )
       allSentMessageIds.push(...sendResult.sentMessageIds)
       

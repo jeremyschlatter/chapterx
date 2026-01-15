@@ -600,7 +600,7 @@ export class SlackConnector implements PlatformConnector {
     }
   }
 
-  async sendMessage(channelId: string, content: string, _replyToMessageId?: string): Promise<string[]> {
+  async sendMessage(channelId: string, content: string, replyToMessageId?: string): Promise<string[]> {
     // Slack has a 40,000 character limit, much higher than Discord
     // But we still split for readability at ~4000 chars
     const MAX_LENGTH = 4000
@@ -614,8 +614,11 @@ export class SlackConnector implements PlatformConnector {
         text: segment,
       }
 
-      // Note: We intentionally don't set thread_ts here.
-      // Bot responses always go to the channel level, not in threads.
+      // Reply in existing thread if specified (for responding within threads)
+      // Note: replyToMessageId should be the thread parent ts, not just any message
+      if (replyToMessageId) {
+        options.thread_ts = replyToMessageId
+      }
 
       const result = await this.client.chat.postMessage(options) as ChatPostMessageResponse
       if (result.ts) {
@@ -630,7 +633,7 @@ export class SlackConnector implements PlatformConnector {
     channelId: string,
     content: string,
     attachment: SendAttachment,
-    _replyToMessageId?: string
+    replyToMessageId?: string
   ): Promise<string[]> {
     const fileContent = typeof attachment.content === 'string'
       ? Buffer.from(attachment.content)
@@ -642,7 +645,9 @@ export class SlackConnector implements PlatformConnector {
       file: fileContent,
       initial_comment: content,
     }
-    // Note: We intentionally don't set thread_ts - bot responses go to channel level
+    if (replyToMessageId) {
+      uploadArgs.thread_ts = replyToMessageId
+    }
 
     const result = await this.client.files.uploadV2(uploadArgs)
 
@@ -663,7 +668,7 @@ export class SlackConnector implements PlatformConnector {
     imageBase64: string,
     mediaType: string,
     caption?: string,
-    _replyToMessageId?: string
+    replyToMessageId?: string
   ): Promise<string[]> {
     const buffer = Buffer.from(imageBase64, 'base64')
     const extension = mediaType.split('/')[1] || 'png'
@@ -674,7 +679,9 @@ export class SlackConnector implements PlatformConnector {
       file: buffer,
       initial_comment: caption,
     }
-    // Note: We intentionally don't set thread_ts - bot responses go to channel level
+    if (replyToMessageId) {
+      uploadArgs.thread_ts = replyToMessageId
+    }
 
     const result = await this.client.files.uploadV2(uploadArgs)
 
