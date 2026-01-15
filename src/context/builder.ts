@@ -449,18 +449,7 @@ export class ContextBuilder {
 
       // Check if we should merge with previous message
       // Don't merge if either message has a thread (thread summary should stay with its message)
-      const canMerge = lastMsg && lastMsg.participant === msg.participant && !lastMsg.hasThread && !msg.hasThread
-      if (lastMsg && lastMsg.participant === msg.participant) {
-        logger.debug({
-          currentMsgId: msg.messageId,
-          lastMsgId: lastMsg.messageId,
-          participant: msg.participant,
-          lastHasThread: lastMsg.hasThread,
-          currentHasThread: msg.hasThread,
-          willMerge: canMerge,
-        }, 'Consecutive same-participant messages')
-      }
-      if (canMerge) {
+      if (lastMsg && lastMsg.participant === msg.participant && !lastMsg.hasThread && !msg.hasThread) {
         // Merge content arrays
         // For text blocks, we join with space; for other types, just append
         const lastTextBlockIndex = lastMsg.content.map(c => c.type).lastIndexOf('text')
@@ -901,21 +890,12 @@ export class ContextBuilder {
         }
       }
       
-      const hasThread = !!msg.threadSummary
-      if (hasThread) {
-        logger.debug({
-          messageId: msg.id,
-          participant,
-          hasThread,
-          threadSummary: msg.threadSummary,
-        }, 'Message has thread - should prevent merge with next message')
-      }
       participantMessages.push({
         participant,
         content,
         timestamp: msg.timestamp,
         messageId: msg.id,
-        hasThread,
+        hasThread: !!msg.threadSummary,
       })
     }
 
