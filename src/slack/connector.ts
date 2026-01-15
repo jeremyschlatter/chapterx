@@ -259,10 +259,40 @@ export class SlackConnector implements PlatformConnector {
 
     let messages: PlatformMessage[]
 
-    // If this is a thread, fetch thread replies instead of channel history
+    // If this is a thread, fetch channel context before the thread + thread replies
     if (threadTs) {
-      logger.debug({ channelId, threadTs, depth }, 'Fetching thread replies')
-      messages = await this.fetchThreadMessages(channelId, threadTs, depth, images, documents)
+      logger.debug({ channelId, threadTs, depth }, 'Fetching thread with channel context')
+
+      // First, fetch channel messages up to (but not including) the thread parent
+      // Use half the depth budget for channel context
+      const channelDepth = Math.floor(depth / 2)
+      const channelMessages = await this.fetchMessagesRecursive(
+        channelId,
+        threadTs,  // Start from thread parent
+        undefined,
+        channelDepth,
+        images,
+        documents
+      )
+
+      // Remove the thread parent from channel messages (it will be first in thread messages)
+      // and clear threadSummary from any messages since we're about to show thread content
+      const channelContextMessages = channelMessages
+        .filter(m => m.id !== threadTs)
+        .map(m => m.id === threadTs ? { ...m, threadSummary: undefined } : m)
+
+      // Fetch thread messages (remaining depth budget)
+      const threadDepth = depth - channelContextMessages.length
+      const threadMessages = await this.fetchThreadMessages(channelId, threadTs, threadDepth, images, documents)
+
+      // Clear threadSummary from the thread parent (first message in thread)
+      // since we're showing the actual thread content
+      if (threadMessages.length > 0 && threadMessages[0]!.id === threadTs) {
+        threadMessages[0] = { ...threadMessages[0]!, threadSummary: undefined }
+      }
+
+      // Combine: channel context + thread messages
+      messages = [...channelContextMessages, ...threadMessages]
     } else {
       messages = await this.fetchMessagesRecursive(
         channelId,
@@ -570,7 +600,7 @@ export class SlackConnector implements PlatformConnector {
     }
   }
 
-  async sendMessage(channelId: string, content: string, replyToMessageId?: string): Promise<string[]> {
+  async sendMessage(channelId: string, content: string, _replyToMessageId?: string): Promise<string[]> {
     // Slack has a 40,000 character limit, much higher than Discord
     // But we still split for readability at ~4000 chars
     const MAX_LENGTH = 4000
@@ -578,30 +608,18 @@ export class SlackConnector implements PlatformConnector {
 
     const segments = this.splitMessage(content, MAX_LENGTH)
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]!
+    for (const segment of segments) {
       const options: any = {
         channel: channelId,
         text: segment,
       }
 
-      // Reply in thread if specified
-      if (replyToMessageId) {
-        options.thread_ts = replyToMessageId
-      }
+      // Note: We intentionally don't set thread_ts here.
+      // Bot responses always go to the channel level, not in threads.
 
       const result = await this.client.chat.postMessage(options) as ChatPostMessageResponse
       if (result.ts) {
         sentIds.push(result.ts)
-      }
-
-      // Only the first message should be a reply
-      // Subsequent messages continue in the same thread
-      if (i === 0 && result.ts && !replyToMessageId) {
-        // Not in a thread - subsequent messages are standalone
-      } else if (result.ts) {
-        // Continue in thread
-        replyToMessageId = replyToMessageId || result.ts
       }
     }
 
@@ -612,7 +630,7 @@ export class SlackConnector implements PlatformConnector {
     channelId: string,
     content: string,
     attachment: SendAttachment,
-    replyToMessageId?: string
+    _replyToMessageId?: string
   ): Promise<string[]> {
     const fileContent = typeof attachment.content === 'string'
       ? Buffer.from(attachment.content)
@@ -624,7 +642,7 @@ export class SlackConnector implements PlatformConnector {
       file: fileContent,
       initial_comment: content,
     }
-    if (replyToMessageId) uploadArgs.thread_ts = replyToMessageId
+    // Note: We intentionally don't set thread_ts - bot responses go to channel level
 
     const result = await this.client.files.uploadV2(uploadArgs)
 
@@ -645,7 +663,7 @@ export class SlackConnector implements PlatformConnector {
     imageBase64: string,
     mediaType: string,
     caption?: string,
-    replyToMessageId?: string
+    _replyToMessageId?: string
   ): Promise<string[]> {
     const buffer = Buffer.from(imageBase64, 'base64')
     const extension = mediaType.split('/')[1] || 'png'
@@ -656,7 +674,7 @@ export class SlackConnector implements PlatformConnector {
       file: buffer,
       initial_comment: caption,
     }
-    if (replyToMessageId) uploadArgs.thread_ts = replyToMessageId
+    // Note: We intentionally don't set thread_ts - bot responses go to channel level
 
     const result = await this.client.files.uploadV2(uploadArgs)
 
