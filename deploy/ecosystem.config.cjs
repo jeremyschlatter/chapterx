@@ -5,7 +5,7 @@ const path = require('path');
 // Each bot needs a Slack app with its own tokens in deploy/tokens/<bot-id>/
 const bots = [
   'opus_45',
-  // 'haiku_45',  // Uncomment when you have tokens for this bot
+  'haiku_45',  // Uncomment when you have tokens for this bot
 ];
 
 const readToken = (botId, filename) => {
